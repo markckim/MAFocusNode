@@ -13,5 +13,5 @@ Additionally, scale and rotation transforms area also applied onto the focus nod
 
 **Focus Node Demo:**
 
-https://user-images.githubusercontent.com/1800538/180707744-b6603cb8-2580-426c-8490-68a4951c8ed0.mov
+https://user-images.githubusercontent.com/1800538/180707884-fee4ec1e-f23e-474c-b4fc-a80b4628a7d5.mov
 
