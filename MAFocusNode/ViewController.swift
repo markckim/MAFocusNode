@@ -12,63 +12,103 @@ import ARKit
 class ViewController: UIViewController, ARSCNViewDelegate {
 
     @IBOutlet var sceneView: ARSCNView!
+
+    var focusNode: SCNNode!
+    var focusNodeTracker: NodeTracker = NodeTracker()
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        // Set the view's delegate
-        sceneView.delegate = self
-        
-        // Show statistics such as fps and timing information
-        sceneView.showsStatistics = true
-        
-        // Create a new scene
-        let scene = SCNScene(named: "art.scnassets/ship.scn")!
-        
-        // Set the scene to the view
-        sceneView.scene = scene
-    }
-    
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        
-        // Create a session configuration
-        let configuration = ARWorldTrackingConfiguration()
-
-        // Run the view's session
-        sceneView.session.run(configuration)
+        initScene()
+        initARSession()
+        initFocusNode()
+        initFocusNodeTracker()
     }
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        
-        // Pause the view's session
         sceneView.session.pause()
     }
+}
 
-    // MARK: - ARSCNViewDelegate
-    
-/*
-    // Override to create and configure nodes for anchors added to the view's session.
-    func renderer(_ renderer: SCNSceneRenderer, nodeFor anchor: ARAnchor) -> SCNNode? {
-        let node = SCNNode()
-     
-        return node
+// MARK: - ARSCNViewDelegate
+
+extension ViewController {
+    func renderer(_ renderer: SCNSceneRenderer, didAdd node: SCNNode, for anchor: ARAnchor) {}
+
+    func renderer(_ renderer: SCNSceneRenderer, didRemove node: SCNNode, for anchor: ARAnchor) {}
+
+    func renderer(_ renderer: SCNSceneRenderer, didUpdate node: SCNNode, for anchor: ARAnchor) {}
+}
+
+// MARK: - Session Management (ARSessionObserver)
+
+extension ViewController {
+    func initARSession() {
+        guard ARWorldTrackingConfiguration.isSupported else {
+            print("AR World Tracking not supported")
+            return
+        }
+
+        let config = ARWorldTrackingConfiguration()
+
+        config.worldAlignment = .gravity
+        config.providesAudioData = false
+        config.planeDetection = [.horizontal, .vertical]
+        config.isLightEstimationEnabled = true
+        config.environmentTexturing = .automatic
+
+        sceneView.session.run(config)
     }
-*/
-    
-    func session(_ session: ARSession, didFailWithError error: Error) {
-        // Present an error message to the user
-        
+
+    func resetARSession() {
+        let config = sceneView.session.configuration as! ARWorldTrackingConfiguration
+        config.planeDetection = [.horizontal, .vertical]
+        sceneView.session.run(config, options: [.resetTracking, .removeExistingAnchors])
     }
-    
-    func sessionWasInterrupted(_ session: ARSession) {
-        // Inform the user that the session has been interrupted, for example, by presenting an overlay
-        
+
+    func session(_ session: ARSession, cameraDidChangeTrackingState camera: ARCamera) {}
+
+    func session(_ session: ARSession, didFailWithError error: Error) {}
+
+    func sessionWasInterrupted(_ session: ARSession) {}
+
+    func sessionInterruptionEnded(_ session: ARSession) {}
+}
+
+// MARK: - Render Management (SCNSceneRendererDelegate)
+
+extension ViewController {
+    func renderer(_ renderer: SCNSceneRenderer, updateAtTime time: TimeInterval) {
+        DispatchQueue.main.async {
+            self.focusNodeTracker.updateAt(time: time)
+        }
     }
-    
-    func sessionInterruptionEnded(_ session: ARSession) {
-        // Reset tracking and/or remove existing anchors if consistent tracking is required
-        
+}
+
+// MARK: - Scene Management
+
+extension ViewController {
+    func initScene() {
+        let scene = SCNScene()
+        sceneView.scene = scene
+        sceneView.delegate = self
+        sceneView.autoenablesDefaultLighting = true
+        sceneView.automaticallyUpdatesLighting = true
+    }
+}
+
+// MARK: - Node Management
+
+extension ViewController {
+    func initFocusNode() {
+        let focusScene = SCNScene(named: "art.scnassets/Focus.scn")!
+        focusNode = focusScene.rootNode.childNode(withName: "Focus", recursively: false)
+        sceneView.scene.rootNode.addChildNode(focusNode)
+    }
+
+    func initFocusNodeTracker() {
+        focusNodeTracker.sceneView = sceneView
+        focusNodeTracker.trackedNode = focusNode
+        focusNodeTracker.trackingNode = sceneView.pointOfView!
     }
 }
