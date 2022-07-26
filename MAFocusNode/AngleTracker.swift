@@ -11,6 +11,7 @@ import SceneKit
 class AngleTracker {
     weak var trackingNode: SCNNode?
 
+    // TODO: not using this right now -- do i need it?
     var trackedNodeReferenceTransform: simd_float4x4?
 
     var trackedNodeAlignedTransform: simd_float4x4? {
@@ -148,6 +149,8 @@ extension AngleTracker {
             last = next
         }
     }
+
+    // TODO: refactor reduce operations from ~O(n) time -> ~O(1) time
 
     private func averageAngularVelocityX() -> Double {
         guard dwXArray.count == capacity, dtArray.count == capacity else {

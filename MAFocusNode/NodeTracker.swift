@@ -9,8 +9,6 @@ import Foundation
 import SceneKit
 import ARKit
 
-typealias NodeTrackerAnimationCompletion = (() -> Void)
-
 class NodeTracker: NSObject {
     weak var sceneView: ARSCNView?
 
@@ -32,7 +30,6 @@ class NodeTracker: NSObject {
     var trackedNodeEnableScaleEffect: Bool
     var trackedNodeEnableRotationEffect: Bool
     var panEnableRotationEffect: Bool
-    var highlighted: Bool
 
     // trackers
     private(set) var trackedNodePositionTracker: PositionTracker
@@ -41,33 +38,8 @@ class NodeTracker: NSObject {
     // transforms
     var initialTransform: simd_float4x4
     private var adjustedPlaneTransform: simd_float4x4
-    private var panRotationTransform: simd_float4x4
     private var planeRotationTransform: simd_float4x4
     private var rotationAdjustedPlaneTransform: simd_float4x4
-
-    // rotating
-    private var rotateInitialRotation: CGFloat?
-    private var rotateInitialPlaneRotationTransform: simd_float4x4?
-
-    // panning
-    private var panTrackingNode: SCNNode?
-    private var panInitialPanRotationTransform: simd_float4x4
-    private var panInitialPlanePosition: simd_float3?
-    private var panInitialNodePosition: simd_float3?
-    private var lastTouchPlaneMatch: ARRaycastResult?
-
-    // teleporting
-    private var trackedNodeOriginalScale: simd_float3?
-
-    // animations
-    private var positionAnimation: CABasicAnimation?
-    private var orientationAnimation: CABasicAnimation?
-    private var scaleAnimation: CABasicAnimation?
-    private var opacityAnimation: CABasicAnimation?
-    private var animationCompletion: NodeTrackerAnimationCompletion?
-
-    // debug
-    var panAngleY: Float = 0.0
 
     init(sceneView: ARSCNView? = nil) {
         // private
@@ -75,15 +47,8 @@ class NodeTracker: NSObject {
         self.trackingNodeAngleTracker = AngleTracker()
         self.initialTransform = matrix_identity_float4x4
         self.adjustedPlaneTransform = matrix_identity_float4x4
-        self.panRotationTransform = matrix_identity_float4x4
         self.planeRotationTransform = matrix_identity_float4x4
         self.rotationAdjustedPlaneTransform = matrix_identity_float4x4
-        self.panInitialPanRotationTransform = matrix_identity_float4x4
-        self.positionAnimation = nil
-        self.orientationAnimation = nil
-        self.scaleAnimation = nil
-        self.opacityAnimation = nil
-        self.animationCompletion = nil
 
         // public
         self.sceneView = sceneView
@@ -94,7 +59,6 @@ class NodeTracker: NSObject {
         self.trackedNodeEnableScaleEffect = true
         self.trackedNodeEnableRotationEffect = true
         self.panEnableRotationEffect = true
-        self.highlighted = false
     }
 
     func updateAt(time: TimeInterval) {
@@ -107,16 +71,11 @@ class NodeTracker: NSObject {
 // MARK: - Node Management
 
 extension NodeTracker {
-    func update(with trackingNode: SCNNode?, screenLocation: CGPoint? = nil, animationCompletion: NodeTrackerAnimationCompletion? = nil) {
+    func update(with trackingNode: SCNNode?) {
         guard let sceneView = sceneView,
               let trackedNode = trackedNode,
               let trackingNode = trackingNode
         else {
-            return
-        }
-
-        guard positionAnimation == nil, orientationAnimation == nil, scaleAnimation == nil, opacityAnimation == nil else {
-            print("currently animating, update not accessible")
             return
         }
 
@@ -127,19 +86,9 @@ extension NodeTracker {
         trackedNode.isHidden = false
 
         // build raycast query
-        let query: ARRaycastQuery
-        if let screenLocation = screenLocation {
-            // ray cast to screenLocation, if provided
-            guard let testQuery = sceneView.raycastQuery(from: screenLocation, allowing: .existingPlaneGeometry, alignment: .any) else {
-                return
-            }
-            query = testQuery
-        } else {
-            // ray cast from trackingNode
-            let trackingNodeOrigin = trackingNode.simdTransform.translation()
-            let trackingDirection = trackingNode.simdTransform.unitBackVector()
-            query = ARRaycastQuery(origin: trackingNodeOrigin, direction: trackingDirection, allowing: .existingPlaneGeometry, alignment: .any)
-        }
+        let trackingNodeOrigin = trackingNode.simdTransform.translation()
+        let trackingDirection = trackingNode.simdTransform.unitBackVector()
+        let query = ARRaycastQuery(origin: trackingNodeOrigin, direction: trackingDirection, allowing: .existingPlaneGeometry, alignment: .any)
 
         // raycast
         let results = sceneView.session.raycast(query)
@@ -164,23 +113,6 @@ extension NodeTracker {
         // get final transform
         let finalTrackedNodeTransform = updatedTransform(from: match, trackingNode: trackingNode)
         trackedNode.simdTransform = finalTrackedNodeTransform
-    }
-
-    private func resetTrackedNodePositionTrackerIfNeeded(lastPlaneMatch: ARRaycastResult, planeMatch: ARRaycastResult) {
-        let currentForwardVector = lastPlaneMatch.worldTransform.unitForwardVector()
-        let currentRightVector = lastPlaneMatch.worldTransform.unitRightVector()
-        let currentPlaneNormalVector = simd_cross(currentForwardVector, currentRightVector)
-
-        let newForwardVector = planeMatch.worldTransform.unitForwardVector()
-        let newRightVector = planeMatch.worldTransform.unitRightVector()
-        let newPlaneNormalVector = simd_cross(newForwardVector, newRightVector)
-
-        // threshold of 10 degrees
-        let thresholdRadians = Float(10.0 * .pi / 180.0)
-        let dRadians = thetaRadians(currentPlaneNormalVector, newPlaneNormalVector)
-        if dRadians > thresholdRadians {
-            trackedNodePositionTracker.reset()
-        }
     }
 
     private func updatedTransform(from match: ARRaycastResult, trackingNode: SCNNode?) -> simd_float4x4 {
@@ -211,9 +143,6 @@ extension NodeTracker {
         if trackedNodeAlignedWithTrackingNode {
             finalTrackedNodeTransform = planeRotationTransform * finalTrackedNodeTransform
         }
-
-        // adjust for any panning that was done
-        finalTrackedNodeTransform = panRotationTransform * finalTrackedNodeTransform
 
         finalTrackedNodeTransform = adjustedPlaneTransform * finalTrackedNodeTransform
 

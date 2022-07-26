@@ -92,6 +92,7 @@ extension PositionTracker {
         }
     }
 
+    // TODO: refactor reduce operation from ~O(n) time -> ~O(1) time
     private func averageVelocity() -> simd_float3 {
         guard node != nil else {
             return simd_float3(0, 0, 0)
